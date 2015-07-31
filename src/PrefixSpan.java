@@ -17,22 +17,18 @@ public class PrefixSpan {
     public PrefixSpan(String filepath, double minsup) {
         this.minsup = minsup;
 
-        // a frequent itemset, will remove those infrequent in prefix span
-        TreeSet<Integer> frequentItemset = new TreeSet<>();
-
         // build sequence database
         ArrayList<ArrayList<ArrayList<Integer>>> sequenceDatabase =
-                build_sequential_database_from_file(filepath, frequentItemset);
+                build_sequential_database_from_file(filepath);
         threshold = (int) Math.floor(minsup * sequenceDatabase.size());
-        prefix_span(null, 0, sequenceDatabase, frequentItemset);
+        prefix_span(null, 0, sequenceDatabase);
     }
 
     public PrefixSpan() {
         this("/home/mhwong/Desktop/prefix_span_dataset/test.ascii", 0.5);
     }
 
-    private ArrayList<ArrayList<ArrayList<Integer>>> build_sequential_database_from_file(
-            String filepath, TreeSet<Integer> frequentItemset) {
+    private ArrayList<ArrayList<ArrayList<Integer>>> build_sequential_database_from_file(String filepath) {
         /**
          *  Input File format:
          *  CustId    TransId    Item
@@ -92,8 +88,6 @@ public class PrefixSpan {
                 }
 
                 itemset.add(itemId);
-                // add all kinds of item first, remove those infrequent in prefix span
-                frequentItemset.add(itemId);
 
                 // if custId != prevCustId means he is a new customer,
                 // should insert previous customer id and clear it
@@ -119,8 +113,7 @@ public class PrefixSpan {
 
     private void prefix_span(ArrayList<ArrayList<Integer>> alpha,
                              int length,
-                             ArrayList<ArrayList<ArrayList<Integer>>> sequentialDatabase,
-                             TreeSet<Integer> frequentItemset) {
+                             ArrayList<ArrayList<ArrayList<Integer>>> sequentialDatabase) {
 
         // first we count frequencies from sequential database
         HashMap<Integer, Integer> frequency = new HashMap<>();
@@ -151,53 +144,25 @@ public class PrefixSpan {
                         }
                     }
                 }
-
-                // if no, treat like normal itemset
-                for(int item: itemSet) {
-                    sequenceItem.add(item);
-                }
-
-                // add to frequency table
-                for(int item: sequenceItem) {
-                    if(frequency.containsKey(item)) {
-                        frequency.put(item, frequency.get(item) + 1);
-                    }
-                    else {
-                        frequency.put(item, 1);
+                else {
+                    // if no, treat like normal itemset
+                    for(int item: itemSet) {
+                        sequenceItem.add(item);
                     }
                 }
-
-                sequenceItem.clear();
-
             }
-        }
+            // add to frequency table
+            for(int item: sequenceItem) {
+                if(frequency.containsKey(item)) {
+                    frequency.put(item, frequency.get(item) + 1);
+                }
+                else {
+                    frequency.put(item, 1);
+                }
+            }
 
-//        for(int item: frequentItemset) {
-//            next_sequence: for(ArrayList<ArrayList<Integer>> sequence: sequentialDatabase) {
-//                for(ArrayList<Integer> itemSet: sequence) {
-//                    // if item is a negative items... negate it and add the last element from alpha
-//                    ArrayList<Integer> itemToBeMatch1 = new ArrayList<>();
-//                    ArrayList<Integer> itemToBeMatch2 = new ArrayList<>();
-//                    if(item < 0) {
-//
-//                        itemToBeMatch1.addAll(alpha.get(alpha.size()-1));
-//                        itemToBeMatch1.add(Math.negateExact(item));
-//                    }
-//
-//                    itemToBeMatch2.add(item);
-//
-//                    if((!itemToBeMatch1.isEmpty() && itemSet.containsAll(itemToBeMatch1)) || (!itemToBeMatch2.isEmpty() && itemSet.containsAll(itemToBeMatch2))) {
-//                        if(frequency.containsKey(item)) {
-//                            frequency.put(item, frequency.get(item) + 1);
-//                        }
-//                        else {
-//                            frequency.put(item, 1);
-//                        }
-//                        continue next_sequence;
-//                    }
-//                }
-//            }
-//        }
+            sequenceItem.clear();
+        }
 
         // we remove those infrequent item
         for(Iterator<Integer> iterator = frequency.keySet().iterator(); iterator.hasNext();) {
@@ -205,11 +170,10 @@ public class PrefixSpan {
                 iterator.remove();
             }
         }
-        frequentItemset.retainAll(frequency.keySet());
 
         ArrayList<ArrayList<ArrayList<Integer>>> projectedDatabase = new ArrayList<>();
         TreeSet<Integer> projectedFrequentItemList = new TreeSet<>();
-        for(int frequentItem: frequentItemset) {
+        for(int frequentItem: frequency.keySet()) {
             // append it to alpha to form alpha', output
             ArrayList<ArrayList<Integer>> newAlpha = new ArrayList<>();
             if(alpha != null && !alpha.isEmpty()){
@@ -249,7 +213,7 @@ public class PrefixSpan {
                 for(ArrayList<Integer> itemset: sequence) {
                     ArrayList<Integer> projectedItemset = new ArrayList<>();
                     for(int item: itemset) {
-                        if(frequentItemset.contains(item)) {
+                        if(frequency.containsKey(item)) {
                             projectedItemset.add(item);
                         }
                     }
@@ -376,7 +340,7 @@ public class PrefixSpan {
 
             // recursive call prefix span
             if(!projectedDatabase.isEmpty()){
-                prefix_span(newAlpha, length+1, projectedDatabase, projectedFrequentItemList);
+                prefix_span(newAlpha, length+1, projectedDatabase);
             }
 
         }
