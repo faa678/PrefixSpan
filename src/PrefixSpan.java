@@ -135,6 +135,10 @@ public class PrefixSpan {
                 // as value with underscore and without
                 // eg: prefix = <a>, sequence = <ac>, we threat c in <ac> as c and _c
                 if(alphaLastItemsetPointer != null && !alphaLastItemsetPointer.isEmpty() && itemSet.containsAll(alphaLastItemsetPointer)) {
+                    // add item in alpha last itemset pointer as usual
+                    for(int item: alphaLastItemsetPointer) {
+                        sequenceItem.add(item);
+                    }
                     ArrayList<Integer> shadowItemSet = new ArrayList<>(itemSet);
                     shadowItemSet.removeAll(alphaLastItemsetPointer);
                     for(int shadowItem: shadowItemSet) {
