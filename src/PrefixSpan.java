@@ -134,14 +134,12 @@ public class PrefixSpan {
                 // if yes, we should treat the element after the last elemenet from the pointer
                 // as value with underscore and without
                 // eg: prefix = <a>, sequence = <ac>, we threat c in <ac> as c and _c
-                if(alphaLastItemsetPointer != null && !alphaLastItemsetPointer.isEmpty()) {
-                    if(itemSet.containsAll(alphaLastItemsetPointer)) {
-                        ArrayList<Integer> shadowItemSet = new ArrayList<>(itemSet);
-                        shadowItemSet.removeAll(alphaLastItemsetPointer);
-                        for(int shadowItem: shadowItemSet) {
-                            sequenceItem.add(shadowItem);
-                            sequenceItem.add(Math.negateExact(shadowItem));
-                        }
+                if(alphaLastItemsetPointer != null && !alphaLastItemsetPointer.isEmpty() && itemSet.containsAll(alphaLastItemsetPointer)) {
+                    ArrayList<Integer> shadowItemSet = new ArrayList<>(itemSet);
+                    shadowItemSet.removeAll(alphaLastItemsetPointer);
+                    for(int shadowItem: shadowItemSet) {
+                        sequenceItem.add(shadowItem);
+                        sequenceItem.add(Math.negateExact(shadowItem));
                     }
                 }
                 else {
