@@ -9,6 +9,7 @@ import java.util.*;
  */
 public class PrefixSpan {
 
+    private boolean printPattern = false;
     // Count how many frequent sequantial pattern generated
     private int count = 0;
     private double minsup;
@@ -22,10 +23,11 @@ public class PrefixSpan {
                 build_sequential_database_from_file(filepath);
         threshold = (int) Math.floor(minsup * sequenceDatabase.size());
         prefix_span(null, 0, sequenceDatabase);
+        System.out.printf("Number of frequent sequential pattern: %d\n", count);
     }
 
     public PrefixSpan() {
-        this("/home/mhwong/Desktop/prefix_span_dataset/test.ascii", 0.5);
+        this("/home/mhwong/Desktop/prefix_span_dataset/C50S10T2.5N10000.ascii", 0.01);
     }
 
     private ArrayList<ArrayList<ArrayList<Integer>>> build_sequential_database_from_file(String filepath) {
@@ -115,6 +117,74 @@ public class PrefixSpan {
                              int length,
                              ArrayList<ArrayList<ArrayList<Integer>>> sequentialDatabase) {
 
+        // first we build frequency table from sequential database
+        HashMap<Integer, Integer> frequency = buildFrequencyTable(alpha, sequentialDatabase);
+
+        for(int frequentItem: frequency.keySet()) {
+            // then we update the alpha from the frequency table
+            // two thing can be done, for every b in frequency table:
+            // (1) b can be assembled to the last element of alpha (b is a negative value)
+            // (2) <b> can be appended to alpha to form a sequential pattern
+
+            ArrayList<ArrayList<Integer>> newAlpha = new ArrayList<>();
+
+            if(frequentItem < 0) {
+                for(ArrayList<Integer> itemset: alpha) {
+                    ArrayList<Integer> newItemset = new ArrayList<>(itemset);
+                    newAlpha.add(newItemset);
+                }
+                // frequentItem assembled to the last element of alpha
+                ArrayList<Integer> newItemset = new ArrayList<>(newAlpha.get(newAlpha.size()-1));
+                newItemset.add(Math.negateExact(frequentItem));
+                newItemset.sort(Integer::compareTo);
+                newAlpha.set(newAlpha.size() - 1, newItemset);
+            }
+            else {
+                // case b > 0
+                // check if alpha is null or is empty, if not, make a copy
+                if(alpha != null && !alpha.isEmpty()) {
+                    for(ArrayList<Integer> itemset: alpha) {
+                        ArrayList<Integer> newItemset = new ArrayList<>(itemset);
+                        newAlpha.add(newItemset);
+                    }
+                }
+                // append <b> to new alpha
+                ArrayList<Integer> newItemset = new ArrayList<>();
+                newItemset.add(frequentItem);
+                newAlpha.add(newItemset);
+            }
+            // we print out new alpha
+            if(printPattern){
+                printAlpha(newAlpha);
+            }
+            count++;
+
+            // we start construct new alpha's projected database
+            // start from every sequence in the database
+            ArrayList<ArrayList<ArrayList<Integer>>> projectedDatabase = new ArrayList<>();
+            for(ArrayList<ArrayList<Integer>> sequence: sequentialDatabase) {
+
+                // we make a copy of sequence
+                ArrayList<ArrayList<Integer>> projectedSequence = makeACopyOfSequenceWithFrequencyCheck(sequence, frequency.keySet());
+
+                // we find a suffix wrt the current prefix (new alpha)
+                ArrayList<ArrayList<Integer>> suffix = getSuffix(projectedSequence, newAlpha.get(newAlpha.size()-1));
+
+                // if suffix is not null, we push it into projected database
+                if(suffix != null && !suffix.isEmpty()) {
+                    projectedDatabase.add(suffix);
+                }
+            }
+
+            // if projected database isn't null, we recursively call prefix span
+            if(!projectedDatabase.isEmpty()) {
+                prefix_span(newAlpha, length+1, projectedDatabase);
+            }
+        }
+
+    }
+
+    private HashMap<Integer, Integer> buildFrequencyTable(ArrayList<ArrayList<Integer>> alpha, ArrayList<ArrayList<ArrayList<Integer>>> sequentialDatabase) {
         // first we count frequencies from sequential database
         HashMap<Integer, Integer> frequency = new HashMap<>();
 
@@ -131,7 +201,7 @@ public class PrefixSpan {
             HashSet<Integer> sequenceItem = new HashSet<>();
             for(ArrayList<Integer> itemSet: sequence) {
                 // see if the itemset contain all element from the alpha last itemset pointer
-                // if yes, we should treat the element after the last elemenet from the pointer
+                // if yes, we should treat the element after the last element from the pointer
                 // as value with underscore and without
                 // eg: prefix = <a>, sequence = <ac>, we threat c in <ac> as c and _c
                 if(alphaLastItemsetPointer != null && !alphaLastItemsetPointer.isEmpty() && itemSet.containsAll(alphaLastItemsetPointer)) {
@@ -173,179 +243,117 @@ public class PrefixSpan {
             }
         }
 
-        ArrayList<ArrayList<ArrayList<Integer>>> projectedDatabase = new ArrayList<>();
-        TreeSet<Integer> projectedFrequentItemList = new TreeSet<>();
-        for(int frequentItem: frequency.keySet()) {
-            // append it to alpha to form alpha', output
-            ArrayList<ArrayList<Integer>> newAlpha = new ArrayList<>();
-            if(alpha != null && !alpha.isEmpty()){
-                for(ArrayList<Integer> itemset: alpha) {
-                    ArrayList<Integer> newItemset = new ArrayList<>(itemset);
-                    newAlpha.add(newItemset);
-                }
+        return frequency;
+    }
+
+    private void printAlpha(ArrayList<ArrayList<Integer>> alpha) {
+        System.out.print("<");
+        for(ArrayList<Integer> itemset: alpha){
+            if(itemset.size() > 1) {
+                System.out.print("(");
             }
-            if(frequentItem < 0) { // negative means it is in the last element of sequence, eg <(ab)>
-                if(!newAlpha.get(newAlpha.size()-1).contains(Math.negateExact(frequentItem)));
-                    newAlpha.get(newAlpha.size()-1).add(Math.negateExact(frequentItem));
+            for(int item: itemset) {
+                System.out.printf("%d ", item);
             }
-            else { // eg <ab>
-                ArrayList<Integer> itemToBeAdd = new ArrayList<>();
-                itemToBeAdd.add(frequentItem);
-                newAlpha.add(itemToBeAdd);
+            if(itemset.size() > 1) {
+                System.out.print(")");
             }
+        }
+        System.out.println(">");
+    }
 
-            // print new alpha
-            System.out.print("<");
-            for(ArrayList<Integer> itemset: newAlpha){
-                if(itemset.size() > 1) {
-                    System.out.print("(");
-                }
-                for(int item: itemset) {
-                    System.out.printf("%d ", item);
-                }
-                if(itemset.size() > 1) {
-                    System.out.print(")");
-                }
+    private ArrayList<ArrayList<Integer>> makeACopyOfSequenceWithFrequencyCheck(ArrayList<ArrayList<Integer>> sequence, Set<Integer> frequency) {
+
+        ArrayList<ArrayList<Integer>> copyOfSequence = new ArrayList<>();
+        for(ArrayList<Integer> itemset: sequence) {
+            ArrayList<Integer> copyOfItemset = makeACopyOfItemsetWithFrequencyCheck(itemset, frequency);
+            if(!copyOfItemset.isEmpty()) {
+                copyOfSequence.add(copyOfItemset);
             }
-            System.out.println(">");
-            // build the projected database from this frequent item
-            for(ArrayList<ArrayList<Integer>> sequence: sequentialDatabase) {
-                // copy a projected sequence
-                ArrayList<ArrayList<Integer>> projectedSequence = new ArrayList<>();
-                for(ArrayList<Integer> itemset: sequence) {
-                    ArrayList<Integer> projectedItemset = new ArrayList<>();
-                    for(int item: itemset) {
-                        if(frequency.containsKey(item)) {
-                            projectedItemset.add(item);
-                        }
-                    }
-                    projectedItemset.sort((o1, o2) -> {
-                        if(Integer.compare(Math.abs(o1.intValue()), Math.abs(o2.intValue())) == 0) { //equal
-                            return o1.compareTo(o2);
-                        }
-                        else {
-                            return Integer.compare(Math.abs(o1.intValue()), Math.abs(o2.intValue()));
-                        }
-                    });
-                    projectedSequence.add(projectedItemset);
-                }
+        }
+        return copyOfSequence;
+    }
 
-                // TODO: do delete again!
-
-                // delete those doesn't match
-                ArrayList<Integer> itemToBeMatch1 = new ArrayList<>();
-                ArrayList<Integer> itemToBeMatch2 = new ArrayList<>();
-                if(frequentItem < 0) {
-                    itemToBeMatch1.addAll(newAlpha.get(newAlpha.size()-1));
-                }
-
-                itemToBeMatch2.add(frequentItem);
-                Iterator<ArrayList<Integer>> projectSequenceIterator = projectedSequence.iterator();
-                while(projectSequenceIterator.hasNext()) {
-                    // remove the itemset either it doesn't contain itemToBeMatch1 and itemToBeMatch2
-                    ArrayList<Integer> itemset = projectSequenceIterator.next();
-
-                    if(frequentItem < 0) {
-                        if(!itemset.containsAll(itemToBeMatch1) && !itemset.containsAll(itemToBeMatch2)) {
-                            projectSequenceIterator.remove();
-                        }
-                        else {
-                            // found an itemset that contains all item from the frequent item
-                            // we remove the items that are same
-                            itemset.removeAll(itemToBeMatch1);
-                            itemset.removeAll(itemToBeMatch2);
-                            // remove the items that placed before the frequent items
-                            if(!itemset.isEmpty() && (!itemToBeMatch1.isEmpty() || !itemToBeMatch2.isEmpty())){
-                                Iterator<Integer> itemsetIterator = itemset.iterator();
-                                while(itemsetIterator.hasNext()) {
-                                    int item = itemsetIterator.next();
-                                    int intVal1 = Integer.MIN_VALUE;
-                                    int intVal2 = Integer.MIN_VALUE;
-
-                                    if(!itemToBeMatch1.isEmpty()) {
-                                        intVal1 = Math.abs(itemToBeMatch1.get(itemToBeMatch1.size()-1));
-                                    }
-
-                                    if(!itemToBeMatch2.isEmpty()) {
-                                        intVal2 = Math.abs(itemToBeMatch2.get(itemToBeMatch2.size()-1));
-                                    }
-
-                                    if(item < intVal1 || item < intVal2) {
-                                        itemsetIterator.remove();
-                                    }
-                                }
-                            }
-                            // check if itemset left some element
-                            if(!itemset.isEmpty()) {
-                                // negate the first item -> imply it is in the same itemset with the next prefix
-                                itemset.set(0, Math.negateExact(itemset.get(0)));
-                            }
-                            else {
-                                // we remove the itemset if it is empty
-                                projectSequenceIterator.remove();
-                            }
-                            break;
-                        }
-                    }
-                    else {
-                        if(!itemset.containsAll(itemToBeMatch2)) {
-                            projectSequenceIterator.remove();
-                        }
-                        else {
-                            // found an itemset that contains all item from the frequent item
-                            // we remove the items that are same
-                            itemset.removeAll(itemToBeMatch2);
-                            // remove the items that placed before the frequent items
-                            if(!itemset.isEmpty() && !itemToBeMatch2.isEmpty()){
-                                Iterator<Integer> itemsetIterator = itemset.iterator();
-                                while(itemsetIterator.hasNext()) {
-                                    int item = itemsetIterator.next();
-                                    int intVal2 = Integer.MIN_VALUE;
-
-                                    if(!itemToBeMatch2.isEmpty()) {
-                                        intVal2 = Math.abs(itemToBeMatch2.get(itemToBeMatch2.size()-1));
-                                    }
-
-                                    if(item < intVal2) {
-                                        itemsetIterator.remove();
-                                    }
-                                }
-                            }
-                            // check if itemset left some element
-                            if(!itemset.isEmpty()) {
-                                // negate the first item -> imply it is in the same itemset with the next prefix
-                                itemset.set(0, Math.negateExact(itemset.get(0)));
-                            }
-                            else {
-                                // we remove the itemset if it is empty
-                                projectSequenceIterator.remove();
-                            }
-                            break;
-                        }
-                    }
-                }
-
-
-                // get the projected item list, will remove those infrequent in next recursive call
-                for(ArrayList<Integer> itemset: projectedSequence) {
-                    for(int item: itemset) {
-                        projectedFrequentItemList.add(item);
-                    }
-                }
-
-                // add projected sequence into projected database
-                if(!projectedSequence.isEmpty()){
-                    projectedDatabase.add(projectedSequence);
-                }
-
+    private ArrayList<Integer> makeACopyOfItemsetWithFrequencyCheck(ArrayList<Integer> itemset, Set<Integer> frequency) {
+        ArrayList<Integer> copyOfItemset = new ArrayList<>();
+        for(int item: itemset) {
+            // only add those are frequent
+            if(frequency.contains(item)) {
+                copyOfItemset.add(item);
             }
-
-            // recursive call prefix span
-            if(!projectedDatabase.isEmpty()){
-                prefix_span(newAlpha, length+1, projectedDatabase);
-            }
-
         }
 
+        return copyOfItemset;
+    }
+
+    private ArrayList<ArrayList<Integer>> makeACopyOfSequence(List<ArrayList<Integer>> sequence) {
+
+        ArrayList<ArrayList<Integer>> copyOfSequence = new ArrayList<>();
+        for(ArrayList<Integer> itemset: sequence) {
+            ArrayList<Integer> copyOfItemset = makeACopyOfItemset(itemset);
+            if(!copyOfItemset.isEmpty()) {
+                copyOfSequence.add(copyOfItemset);
+            }
+        }
+        return copyOfSequence;
+    }
+
+    private ArrayList<Integer> makeACopyOfItemset(ArrayList<Integer> itemset) {
+        ArrayList<Integer> copyOfItemset = new ArrayList<>();
+        for(int item: itemset) {
+            copyOfItemset.add(item);
+        }
+
+        return copyOfItemset;
+    }
+
+    private ArrayList<ArrayList<Integer>> getSuffix(ArrayList<ArrayList<Integer>> sequence, ArrayList<Integer> prefix) {
+
+        boolean found = false;
+        int i;
+
+        // a pointer to the last item of prefix
+        int prefixLastItem = prefix.get(prefix.size()-1);
+        for(i = 0; i < sequence.size(); i++) {
+            if(sequence.get(i).containsAll(prefix)) {
+                found = true;
+                break;
+            }
+            else if(prefix.size() > 1 && sequence.get(i).get(0) < 0 &&prefixLastItem == Math.negateExact(sequence.get(i).get(0))) {
+                found = true;
+                break;
+            }
+        }
+
+        if(found) {
+            ArrayList<ArrayList<Integer>> suffix = makeACopyOfSequence(sequence.subList(i, sequence.size()));
+            ArrayList<Integer> itemset = suffix.get(0);
+            if(itemset.get(0) < 0) {
+                itemset.remove(0);
+            }
+            else {
+                itemset.removeAll(prefix);
+                // remove things before prefix
+                Iterator<Integer> iterator = itemset.iterator();
+                while(iterator.hasNext()) {
+                    int item = iterator.next();
+                    if(item < prefixLastItem) {
+                        iterator.remove();
+                    }
+                }
+            }
+            if(!itemset.isEmpty()) {
+                itemset.sort(Integer::compareTo);
+                itemset.set(0, Math.negateExact(itemset.get(0)));
+                suffix.set(0, itemset);
+            }
+            else {
+                suffix.remove(0);
+            }
+            return suffix;
+        }
+        else {
+            return null;
+        }
     }
 }
